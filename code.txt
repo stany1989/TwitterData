@@ -1,0 +1,111 @@
+#extact tweets from twitter
+#install these libraries
+library(RColorBrewer)
+library(tm)
+library(wordcloud)
+library(ROAuth)
+library(plyr)
+library(stringr)
+library(base64enc)
+library(twitteR)
+library(SnowballC)
+#you'll need to create a twitter app at https://apps.twitter.com/ using your twitter id and generate the consumer keys in order to access tweets
+
+requestURL = "https://api.twitter.com/oauth/request_token"
+accessURL = "https://api.twitter.com/oauth/access_token"
+authURL = "httpshttps://api.twitter.com/oauth/authorize"
+setup_twitter_oauth(
+  consumer_key = "",
+  consumer_secret = "",
+  access_token = "",
+  access_secret = ""
+)
+mytweet<-searchTwitter("demonetisation",n=200,lang = "en")
+txts<-lapply(mytweet,function(t) t$getText())
+dem<-Corpus(VectorSource(txts))
+dem<-tm_map(dem,removeNumbers)
+dem<-tm_map(dem,removePunctuation)
+dem<-tm_map(dem, function(x)removeWords(x,stopwords()))
+dem<-tm_map(dem,stripWhitespace)
+dem<-tm_map(dem,tolower)
+# the latest package of tm throws up an error after to lowerconversionand hence we convert
+#to plaintextformat beform we execute thetermdocumentmatrix
+dem<-tm_map(dem, PlainTextDocument)
+#oryou can use
+dem<-tm_map(docs,content_transformer(tolower))
+tdm<-TermDocumentMatrix(dem)
+
+set.seed(1234)
+
+
+wordcloud(dem,min.freq=3,max.words=100)
+
+#sentiment analysis of tweets
+
+
+
+setwd("C:/Users/User/Desktop/R codes/class files")
+neg<-scan("negative-words.txt",what = "character",comment.char = ";")
+pos<-scan("positive-words.txt",what = "character",comment.char = ";")
+
+#scan looks through the text files and pulls words that start with characters and 
+#ignores comment lines that start with ;
+
+library(xlsx)
+#can add your own pos or neg words for eg
+neg<-c(neg,'wtf')
+#function to run sentiment analysis
+
+score.sentiment = function(tweets, pos.words, neg.words)
+  
+{
+  
+  require(plyr)
+  require(stringr)
+  
+  scores = laply(tweets, function(tweet, pos.words, neg.words) {
+    
+    
+    
+    tweet = gsub('https://','',tweet) # removes https://
+    tweet = gsub('http://','',tweet) # removes http://
+    tweet=gsub('[^[:graph:]]', ' ',tweet) ## removes graphic characters 
+    #like emoticons 
+    tweet = gsub('[[:punct:]]', '', tweet) # removes punctuation 
+    tweet = gsub('[[:cntrl:]]', '', tweet) # removes control characters
+    tweet = gsub('\\d+', '', tweet) # removes numbers
+    tweet=str_replace_all(tweet,"[^[:graph:]]", " ") 
+    
+    tweet = tolower(tweet) # makes all letters lowercase
+    
+    word.list = str_split(tweet, '\\s+') # splits the tweets by word in a list
+    
+    words = unlist(word.list) # turns the list into vector
+    
+    pos.matches = match(words, pos.words) ## returns matching 
+    #values for words from list 
+    neg.matches = match(words, neg.words)
+    
+    pos.matches = !is.na(pos.matches) ## converts matching values to true of false ie 1 and 0
+    neg.matches = !is.na(neg.matches)
+    
+    score = sum(pos.matches) - sum(neg.matches) # true and false are 
+    #treated as 1 and 0 so they can be added
+    #so sum of pos and neg words in the tweet gives a pos or neg value based on which eachyweet 
+    #is classified as pos or neg ie ifits a pos value its pos and likewise a neg value says tweet is neg
+    return(score)
+    
+  }, pos.words, neg.words )
+  scores.df = data.frame(score=scores, text=tweets)
+  
+  return(scores.df)
+  
+}
+
+#we'lluse the code above to extract tweets about demonetisation and then call the sentiment function
+tweets<-searchTwitter("demonetisation",n=1000,lang = "en")
+Tweets.text = laply(tweets,function(t)t$getText()) # gets text from Tweets
+
+analysis = score.sentiment(Tweets.text, pos, neg) # calls sentiment function
+hist(analysis$score)
+# seem to be mixed bag but leaning more towards negative
